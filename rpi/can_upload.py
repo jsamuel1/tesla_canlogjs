@@ -14,12 +14,6 @@ def upload_to_aws(local_file, s3_file):
     s3_bucket = "bucket1"
     return upload_to_aws_proc(access_key, secret_key, local_file, s3_bucket, s3_file)
 
-def upload_to_aws2(local_file, s3_file):
-    access_key = "AXIAXXXXXXXXXXXXXXXX"
-    secret_key = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-    s3_bucket = "bucket2"
-    return upload_to_aws_proc(access_key, secret_key, local_file, s3_bucket, s3_file)
-
 def upload_to_aws_proc(access_key, secret_key, local_file, s3_bucket, s3_file):
     s3 = boto3.client('s3', aws_access_key_id=access_key,
                       aws_secret_access_key=secret_key)
@@ -48,8 +42,6 @@ def compress_file(file_name):
     return file_name + ".gz"
 
 if __name__ == "__main__":
-  user_name = os.getenv("UPLOADUSER", 'sauhsoj')
-
   while True:
     if internet_connected():
         for file_name in os.listdir():
@@ -57,8 +49,7 @@ if __name__ == "__main__":
                 print(f"Uploading {file_name}")
                 file_name = compress_file(file_name)
             if file_name.endswith(".csv.gz") and internet_connected():
-                bsucess = upload_to_aws(file_name, user_name + '/' + file_name )
-                bsucess = upload_to_aws2(file_name, 'canlog' + '/' + file_name ) and bsucess
+                bsucess = upload_to_aws(file_name, 'canlog' + '/' + file_name ) and bsucess
                 if bsucess:
                     print(f"removing archived file: {file_name}")
                     os.remove(file_name)
