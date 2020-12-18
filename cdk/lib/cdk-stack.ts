@@ -4,6 +4,7 @@ import { PythonFunction } from '@aws-cdk/aws-lambda-python';
 import * as lambda from '@aws-cdk/aws-lambda';
 import * as iam from '@aws-cdk/aws-iam';
 import { Duration } from '@aws-cdk/core';
+import { Tracing } from '@aws-cdk/aws-lambda';
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -14,38 +15,19 @@ export class CdkStack extends cdk.Stack {
       databaseName: "teslacanbus",
     } )
 
-    // var table = new CfnTable(this, "tsdb_table", {
-    //   tableName: "CanSignals",
-    //   databaseName: db.databaseName !,
-    //   retentionProperties: {
-    //     MemoryStoreRetentionPeriodInHours: 8766,
-    //     MagneticStoreRetentionPeriodInDays: 73000
-    //   }
-    // })
+    const layerArn = "arn:aws:lambda:"+ process.env.CDK_DEFAULT_REGION +":580247275435:layer:LambdaInsightsExtension:2";
+    const layer = lambda.LayerVersion.fromLayerVersionArn(this, `LayerFromArn`, layerArn);
 
-    // table.addDependsOn(db)
-
-    var lambdaFunc = new PythonFunction(this, "lambda", {
-      entry: '../processing',
-      index: 'canmsgtosignals.py',
-      runtime: lambda.Runtime.PYTHON_3_8,
-      environment: {
-        'TSDB_NAME': db.databaseName !,
-        // 'TSTABLE_NAME': table.tableName !,
-        'TZ': 'Australia/Melbourne',
-        // 'DEBUG': 'true'
-      }, 
-      timeout: Duration.minutes(15),
-      memorySize: 1024
-    })
-
-    lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+    const lambdarole = new iam.Role(this, "lambdarole", {assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com')});
+    lambdarole.addManagedPolicy({managedPolicyArn: 'arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy'})
+    lambdarole.addManagedPolicy({managedPolicyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'})
+    lambdarole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       resources: ['*'],
       actions: [ 's3:GetObject' ]
     }))
-
-    lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+    
+    lambdarole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       resources: [ "*" ],
       actions: [  
@@ -55,6 +37,23 @@ export class CdkStack extends cdk.Stack {
         "timestream:WriteRecords",
       ]
     }))
+
+      var lambdaFunc = new PythonFunction(this, "lambda", {
+      entry: '../processing',
+      index: 'canmsgtosignals.py',
+      runtime: lambda.Runtime.PYTHON_3_8,
+      environment: {
+        'TSDB_NAME': db.databaseName !,
+        'TZ': 'Australia/Melbourne',
+        // 'DEBUG': 'true'
+      }, 
+      timeout: Duration.minutes(15),
+      memorySize: 1024,
+      tracing: Tracing.ACTIVE,
+      layers: [layer],  // add in Lambda Insights layer
+      role: lambdarole
+    })
+
 
 
   }

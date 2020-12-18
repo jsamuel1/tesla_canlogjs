@@ -62,6 +62,9 @@ class CanMsgToTimestreamSignal(object):
 
 
     def save_to_database(self, table, records, common_attributes):
+        if not records:
+            return
+
         self.ensure_table_exists(table)
         try:
             result = write_client.write_records(DatabaseName=self.db_name, TableName=table, Records=records, CommonAttributes=common_attributes)
@@ -83,49 +86,21 @@ class CanMsgToTimestreamSignal(object):
                 msg = dbc.get_message_by_frame_id(int(row[1],0))
                 msgdata = msg.decode(a2b_hex(row[2][2:]))
 
-                dimensions = [ 
-                    {'Name': 'MsgId', 'Value': msg.name }
-                ]
+                dimensions = []
 
                 tableName = msg.name
 
                 dt = default_tzinfo(datetime.strptime(row[4], r'%Y-%m-%dT%H:%M:%S.%f'), tzinfo)
                 timeMilliseconds = str(int(dt.timestamp() * 1000))
 
+                records = []
+                self.extract_signals_to_records(row, msg, msgdata, dimensions, records)
+
+
                 common_attributes = {
                     'Dimensions': dimensions,
                     'Time': timeMilliseconds
                 }
-
-                records = []
-                for sig, sigval in msgdata.items():
-                    logger.debug(f"{row[4]} {row[1]} : {sig} : {str(sigval)}")
-
-                    multiplex = False
-                    if msg.is_multiplexed():
-                        signal = msg.get_signal_by_name(sig)
-                        if signal.is_multiplexer:
-                            multiplex = True
-
-                    valueType = 'VARCHAR'
-                    if type(sigval) == float:
-                        valueType = 'DOUBLE'
-                    elif type(sigval) == int:
-                        valueType = 'BIGINT'
-                    elif type(sigval) == bool:
-                        valueType = 'BOOLEAN'
-
-                    if multiplex == True:
-                        dimensions.append(
-                            {
-                                'Name': sig, 'Value': str(sigval)
-                            })                    
-                    else:
-                        records.append( {
-                            'MeasureName': str(sig),
-                            'MeasureValue': str(sigval),
-                            'MeasureValueType': valueType
-                        })
 
                 self.save_to_database(tableName, records, common_attributes)
 
@@ -138,10 +113,40 @@ class CanMsgToTimestreamSignal(object):
             except Exception as e:
                 logger.exception(f"Exception: {e} -- MsgId: {row[1]} Data: {row[2]} DataLength: {row[3]}")
 
+    def extract_signals_to_records(self, row, msg, msgdata, dimensions, records):
+        for sig, sigval in msgdata.items():
+            logger.debug(f"{row[4]} {row[1]} : {sig} : {str(sigval)}")
+            multiplex = False
+            if msg.is_multiplexed():
+                signal = msg.get_signal_by_name(sig)
+                if signal.is_multiplexer:
+                    multiplex = True
+            valueType = 'VARCHAR'
+            if type(sigval) == float:
+                valueType = 'DOUBLE'
+            elif type(sigval) == int:
+                valueType = 'BIGINT'
+            elif type(sigval) == bool:
+                valueType = 'BOOLEAN'
+            if multiplex == True:
+                dimensions.append(
+                            {
+                                'Name': sig, 'Value': str(sigval)
+                            })
+            else:
+                records.append( {
+                            'MeasureName': str(sig),
+                            'MeasureValue': str(sigval),
+                            'MeasureValueType': valueType
+                        })
+
     def s3_download(self, bucket, key):
+        subsegment = xray_recorder.begin_subsegment('DownloadFile')
+        subsegment.put_annotation('key', key)
         obj = s3.Object(bucket, key)
         with TextIOWrapper(gzip.GzipFile(fileobj=obj.get()["Body"], mode='r')) as gzipfile:
             csvreader = csv.reader(gzipfile)
+            xray_recorder.end_subsegment()
             self.process_messages(dbc, csvreader)
 
 
