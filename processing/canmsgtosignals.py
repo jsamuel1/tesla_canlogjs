@@ -13,12 +13,14 @@ import dateutil
 from aws_xray_sdk.core import patch_all, xray_recorder
 from dateutil.utils import default_tzinfo
 
-patch_all()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 if (os.getenv('DEBUG')):
     logger.setLevel(logging.DEBUG)
 
+if (not os.getenv('NOAWS')):
+   patch_all()
+   
 write_client = aws.client('timestream-write')
 s3_client = aws.client('s3')
 s3 = aws.resource('s3')
@@ -49,6 +51,8 @@ class CanMsgToTimestreamSignal(object):
         if (exists):
             return
 
+        logger.info(f"Table {table} doesn't exist.  Creating")
+
         try:
             write_client.create_table(DatabaseName=self.db_name, TableName=table, RetentionProperties={
                 'MemoryStoreRetentionPeriodInHours': 8766,
@@ -61,7 +65,7 @@ class CanMsgToTimestreamSignal(object):
         self.populate_database_tables()
 
 
-    def save_to_database(self, table, records, common_attributes):
+    def save_to_database(self, table, records, common_attributes = {}):
         if not records:
             return
 
@@ -79,30 +83,24 @@ class CanMsgToTimestreamSignal(object):
 
     def process_messages(self, dbc, csvreader):
         csvreader.__next__()
+        msgrecords = {}
         for row in csvreader:
             try:
                 logger.debug(f"{row[4]} MsgId: {row[1]} Data: {row[2]}")
-                # msg = dbc.decode_message(int(row[1],0), a2b_hex(row[2][2:]))
                 msg = dbc.get_message_by_frame_id(int(row[1],0))
                 msgdata = msg.decode(a2b_hex(row[2][2:]))
-
-                dimensions = []
-
-                tableName = msg.name
-
                 dt = default_tzinfo(datetime.strptime(row[4], r'%Y-%m-%dT%H:%M:%S.%f'), tzinfo)
                 timeMilliseconds = str(int(dt.timestamp() * 1000))
+                tableName = msg.name
 
-                records = []
-                self.extract_signals_to_records(row, msg, msgdata, dimensions, records)
+                records = CanMsgToTimestreamSignal.extract_signals_to_records(dt, msg, msgdata, timeMilliseconds)
 
+                stored_records = msgrecords.setdefault('tableName', [])
+                if (len(stored_records) + len(records) > 99): # max batch size for timestream
+                    self.save_to_database(tableName, stored_records)
+                    stored_records = []
 
-                common_attributes = {
-                    'Dimensions': dimensions,
-                    'Time': timeMilliseconds
-                }
-
-                self.save_to_database(tableName, records, common_attributes)
+                stored_records.extend(records)
 
             except KeyError as e:
                 logger.warning(f"KeyError: {e} -- {row[4]}: MsgId: {row[1]} Data: {row[2]}")
@@ -112,10 +110,17 @@ class CanMsgToTimestreamSignal(object):
                 pass
             except Exception as e:
                 logger.exception(f"Exception: {e} -- MsgId: {row[1]} Data: {row[2]} DataLength: {row[3]}")
+        
+        logger.info(f"Finished processing CSV.  Writing {len(msgrecords.items())} FrameIDs to database")
+        for a_table, a_records in msgrecords.items():
+            logger.info(f"Writing {a_table}: {len(a_records)}")
+            self.save_to_database(a_table, a_records)
 
-    def extract_signals_to_records(self, row, msg, msgdata, dimensions, records):
+    def extract_signals_to_records(dt, msg, msgdata, timeMilliseconds):
+        dimensions = []
+        records = []
         for sig, sigval in msgdata.items():
-            logger.debug(f"{row[4]} {row[1]} : {sig} : {str(sigval)}")
+            logger.debug(f"{dt} : {msg.name} : {sig} : {str(sigval)}")
             multiplex = False
             if msg.is_multiplexed():
                 signal = msg.get_signal_by_name(sig)
@@ -131,14 +136,21 @@ class CanMsgToTimestreamSignal(object):
             if multiplex == True:
                 dimensions.append(
                             {
-                                'Name': sig, 'Value': str(sigval)
+                                'Name': sig, 
+                                'Value': str(sigval)
                             })
             else:
                 records.append( {
                             'MeasureName': str(sig),
                             'MeasureValue': str(sigval),
-                            'MeasureValueType': valueType
+                            'MeasureValueType': valueType,
+                            'Time': timeMilliseconds
                         })
+
+        if dimensions:
+            for rec in records:
+                rec.update({"dimensions" : dimensions})
+        return records
 
     def s3_download(self, bucket, key):
         subsegment = xray_recorder.begin_subsegment('DownloadFile')

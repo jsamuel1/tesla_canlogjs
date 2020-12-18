@@ -12,11 +12,11 @@ export class CdkStack extends cdk.Stack {
 
     // The code that defines your stack goes here
     var db = new CfnDatabase(this, "tsdb", {
-      databaseName: "teslacanbus",
+      databaseName: "teslacanbussigs",
     } )
 
-    const layerArn = "arn:aws:lambda:"+ process.env.CDK_DEFAULT_REGION +":580247275435:layer:LambdaInsightsExtension:2";
-    const layer = lambda.LayerVersion.fromLayerVersionArn(this, `LayerFromArn`, layerArn);
+    // const layerArn = "arn:aws:lambda:"+ process.env.CDK_DEFAULT_REGION +":580247275435:layer:LambdaInsightsExtension:2";
+    // const layer = lambda.LayerVersion.fromLayerVersionArn(this, `LayerFromArn`, layerArn);
 
     const lambdarole = new iam.Role(this, "lambdarole", {assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com')});
     lambdarole.addManagedPolicy({managedPolicyArn: 'arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy'})
@@ -50,7 +50,7 @@ export class CdkStack extends cdk.Stack {
       timeout: Duration.minutes(15),
       memorySize: 1024,
       tracing: Tracing.ACTIVE,
-      layers: [layer],  // add in Lambda Insights layer
+      // layers: [layer],  // add in Lambda Insights layer
       role: lambdarole
     })
 
