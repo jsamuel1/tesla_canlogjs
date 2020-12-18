@@ -20,7 +20,7 @@ if (os.getenv('DEBUG')):
 
 if (not os.getenv('NOAWS')):
    patch_all()
-   
+
 write_client = aws.client('timestream-write')
 s3_client = aws.client('s3')
 s3 = aws.resource('s3')
@@ -149,7 +149,7 @@ class CanMsgToTimestreamSignal(object):
 
         if dimensions:
             for rec in records:
-                rec.update({"dimensions" : dimensions})
+                rec.update({"Dimensions" : dimensions})
         return records
 
     def s3_download(self, bucket, key):
