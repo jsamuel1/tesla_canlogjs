@@ -15,8 +15,10 @@ from dateutil.utils import default_tzinfo
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+debug = False
 if (os.getenv('DEBUG')):
     logger.setLevel(logging.DEBUG)
+    debug = True
 
 if (not os.getenv('NOAWS')):
    patch_all()
@@ -38,17 +40,20 @@ class CanMsgToTimestreamSignal(object):
 
     def populate_database_tables(self):
         result = write_client.list_tables(DatabaseName=self.db_name, MaxResults=20)
-        self.database_tables = result['Tables']
+        self.database_tables = []
+        for val in result['Tables']:
+            self.database_tables.append(val['TableName'])
+
         nextToken = result.get('NextToken')
         while nextToken:
             result = write_client.list_tables(DatabaseName=self.db_name, MaxResults=20, NextToken=nextToken)
-            self.database_tables.extend(result['Tables'])
+            for val in result['Tables']:
+                self.database_tables.append(val['TableName'])
             nextToken = result.get('NextToken')
 
 
     def ensure_table_exists(self, table):
-        exists = [table_props for table_props in self.database_tables if table_props["TableName"] == table]
-        if (exists):
+        if table in self.database_tables:
             return
 
         logger.info(f"Table {table} doesn't exist.  Creating")
@@ -62,7 +67,7 @@ class CanMsgToTimestreamSignal(object):
             logger.info(f"Conflict Exception.  Table {table} already exists.")
             pass
 
-        self.populate_database_tables()
+        self.database_tables.append(table)  # add it to the cache
 
 
     def save_to_database(self, table, records, common_attributes = {}):
@@ -83,10 +88,13 @@ class CanMsgToTimestreamSignal(object):
 
     def process_messages(self, dbc, csvreader):
         csvreader.__next__()
+        logger.info("Started p[rocessing CSV.")
         msgrecords = {}
         for row in csvreader:
             try:
-                logger.debug(f"{row[4]} MsgId: {row[1]} Data: {row[2]}")
+                if (debug):
+                    logger.debug(f"{row[4]} MsgId: {row[1]} Data: {row[2]}")
+
                 msg = dbc.get_message_by_frame_id(int(row[1],0))
                 msgdata = msg.decode(a2b_hex(row[2][2:]))
                 dt = default_tzinfo(datetime.strptime(row[4], r'%Y-%m-%dT%H:%M:%S.%f'), tzinfo)
@@ -97,6 +105,7 @@ class CanMsgToTimestreamSignal(object):
 
                 stored_records = msgrecords.setdefault('tableName', [])
                 if (len(stored_records) + len(records) > 99): # max batch size for timestream
+                    logger.info(f'Saving to database as too many records for table {tableName}')
                     self.save_to_database(tableName, stored_records)
                     stored_records = []
 
@@ -111,16 +120,25 @@ class CanMsgToTimestreamSignal(object):
             except Exception as e:
                 logger.exception(f"Exception: {e} -- MsgId: {row[1]} Data: {row[2]} DataLength: {row[3]}")
         
-        logger.info(f"Finished processing CSV.  Writing {len(msgrecords.items())} FrameIDs to database")
+        logger.info(f"Finished processing CSV.")
+        logger.info(f"Writing {len(msgrecords.items())} FrameIDs to database")
         for a_table, a_records in msgrecords.items():
             logger.info(f"Writing {a_table}: {len(a_records)}")
             self.save_to_database(a_table, a_records)
+        logger.info("Finished writing FrameIDs to database")
+        
 
     def extract_signals_to_records(dt, msg, msgdata, timeMilliseconds):
-        dimensions = []
+        dimensions = [{
+            'Name': 'FrameId', 
+            'Value': msg.name 
+            }]
         records = []
+
         for sig, sigval in msgdata.items():
-            logger.debug(f"{dt} : {msg.name} : {sig} : {str(sigval)}")
+            if debug:
+                logger.debug(f"{dt} : {msg.name} : {sig} : {str(sigval)}")
+
             multiplex = False
             if msg.is_multiplexed():
                 signal = msg.get_signal_by_name(sig)
