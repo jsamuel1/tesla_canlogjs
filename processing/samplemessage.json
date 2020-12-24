@@ -1,0 +1,84 @@
+{
+    "MessageId": "8ae1825a-46da-4960-99a3-50b0bfda5251", 
+    "ReceiptHandle": "AQEBVjNVVBoK++GF95UGbxRlwUpDdul91JtExQueYdfo1+K7/kvptEEgjq9Tdi6OIAt2I5Sb+xchlBnAv0m0YbQWmZAIwtLXVhaAT6N6YDtrJELDXwM3mG1w09R9LJIV/2EAoJNYF+gj7eP1A2ez/M3b+jaRwCGogRVdTkfl9j7306d/4R+N4xmxphVp3SAeNEX9T6LUAj3tzAcbf7DjB7A3tep0zlAJcRmWf1WIgTIBXmwhrEL2mIKj/DCUOz8gPew0iwXZR4gGv9kuuBscw3q41ziTCqe11FrCc7KMVrNTdrvrt15ifUsrgGv5H6kLpp/YzV24sr/8xq2wRXtwy0rEsrRICJo6bpgj0M1Yym0B3/DwBV/C+KwOXm9Cs0D0tDALXEAjWUIBB5bVgo5C5rqIHg==", 
+    "MD5OfBody": "0ab6792fca6ae82848eff792fedf5a96", 
+    "Body": {
+        "version": "0",
+        "id": "0a41dbb2-0bcb-2179-9d2b-bf6cdbda58d6",
+        "detail-type": "AWS API Call via CloudTrail",
+        "source": "aws.s3",
+        "account": "xxxxxxxxxxxxxxxxxx",
+        "time": "2020-12-23T07:13:28Z",
+        "region": "eu-west-1",
+        "resources": [],
+        "detail": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "AssumedRole",
+                "principalId": "AROAX6ULCILDZI77XSTJU:jsamuel@gmail.com",
+                "arn": "arn:aws:sts::546826240711:assumed-role/AWSReservedSSO_AWSAdministratorAccess_54f64a69fb86fc86/jsamuel@gmail.com",
+                "accountId": "xxxxxxxxxxxx",
+                "accessKeyId": "XXXXXXXXXXXXXXXXXXXXXXXX",
+                "sessionContext": {
+                    "sessionIssuer": {
+                        "type": "Role",
+                        "principalId": "AROAX6ULCILDZI77XSTJU",
+                        "arn": "arn:aws:iam::xxxxxxxxxxxxxxxx:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AWSAdministratorAccess_54f64a69fb86fc86",
+                        "accountId": "xxxxxxxxxxxxxxxx",
+                        "userName": "AWSReservedSSO_AWSAdministratorAccess_54f64a69fb86fc86"
+                    },
+                    "attributes": {
+                        "creationDate": "2020-12-23T05:15:40Z",
+                        "mfaAuthenticated": "false"
+                    }
+                }
+            },
+            "eventTime": "2020-12-23T07:13:28Z",
+            "eventSource": "s3.amazonaws.com",
+            "eventName": "PutObject",
+            "awsRegion": "eu-west-1",
+            "sourceIPAddress": "54.240.197.231",
+            "userAgent": "[Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36]",
+            "requestParameters": {
+                "X-Amz-Date": "20201223T071326Z",
+                "bucketName": "cdkstack-canlog9e6e9d29-ilyu5hifzbxe",
+                "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+                "x-amz-acl": "private",
+                "X-Amz-SignedHeaders": "content-md5;content-type;host;x-amz-acl;x-amz-storage-class",
+                "Host": "cdkstack-canlog9e6e9d29-ilyu5hifzbxe.s3.eu-west-1.amazonaws.com",
+                "X-Amz-Expires": "299",
+                "key": "canlog/package-lock.json",
+                "x-amz-storage-class": "STANDARD"
+            },
+            "responseElements": {
+                "x-amz-expiration": "expiry-date=\"Thu,7 Jan 2021 00: 00: 00 GMT\", rule-id=\"MTA2OTdmNmEtMDJmMy00MzVkLWE4NGEtYTM2MGJlYWExMjA1\""
+            },
+            "additionalEventData": {
+                "SignatureVersion": "SigV4",
+                "CipherSuite": "ECDHE-RSA-AES128-GCM-SHA256",
+                "bytesTransferredIn": 14688.0,
+                "AuthenticationMethod": "QueryString",
+                "x-amz-id-2": "cO6hggzPeysriUqLd06cxiVk5LVgvgxq/BE6tEeg45iLA9whoxoysMIUyfVjGClku5lw2w1WJkY=",
+                "bytesTransferredOut": 0.0
+            },
+            "requestID": "39195D33FE23CE3F",
+            "eventID": "2dbae784-ddec-4f74-b039-774931ba61cd",
+            "readOnly": false,
+            "resources": [
+                {
+                    "type": "AWS::S3::Object",
+                    "ARN": "arn:aws:s3:::cdkstack-canlog9e6e9d29-ilyu5hifzbxe/canlog/package-lock.json"
+                },
+                {
+                    "accountId": "xxxxxxxxxxxx",
+                    "type": "AWS::S3::Bucket",
+                    "ARN": "arn:aws:s3:::cdkstack-canlog9e6e9d29-ilyu5hifzbxe"
+                }
+            ],
+            "eventType": "AwsApiCall",
+            "managementEvent": false,
+            "recipientAccountId": "xxxxxxxxxxxxxxxxxxxxx",
+            "eventCategory": "Data"
+        }
+    }
+}

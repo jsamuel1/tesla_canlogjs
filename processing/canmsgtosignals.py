@@ -10,7 +10,6 @@ from urllib.parse import unquote_plus
 import boto3 as aws
 import cantools
 import dateutil
-from aws_xray_sdk.core import patch_all, xray_recorder
 from dateutil.utils import default_tzinfo
 
 logger = logging.getLogger()
@@ -20,12 +19,11 @@ if (os.getenv('DEBUG')):
     logger.setLevel(logging.DEBUG)
     debug = True
 
-if (not os.getenv('NOAWS')):
-   patch_all()
 
 write_client = aws.client('timestream-write')
 s3_client = aws.client('s3')
 s3 = aws.resource('s3')
+sqs = aws.client('sqs')
 dbc = cantools.database.load_file('Model3CAN.dbc')
 tzinfo = dateutil.tz.gettz(os.getenv('TZ'))
 
@@ -171,12 +169,9 @@ class CanMsgToTimestreamSignal(object):
         return records
 
     def s3_download(self, bucket, key):
-        subsegment = xray_recorder.begin_subsegment('DownloadFile')
-        subsegment.put_annotation('key', key)
         obj = s3.Object(bucket, key)
         with TextIOWrapper(gzip.GzipFile(fileobj=obj.get()["Body"], mode='r')) as gzipfile:
             csvreader = csv.reader(gzipfile)
-            xray_recorder.end_subsegment()
             self.process_messages(dbc, csvreader)
 
 
@@ -198,6 +193,7 @@ class CanMsgToTimestreamSignal(object):
                 logging.info(f"Bytes scanned: {event['Stats']['Details']} Processed: {event['Stats']['Details']}")
 
 
+# for lambda
 def handler(event, context):
      for record in event['Records']:
         bucket = record['s3']['bucket']['name']
@@ -207,3 +203,34 @@ def handler(event, context):
         # s3_select(bucket, key)
         processor.s3_download(bucket, key)
 
+# for Docker / SQS
+if __name__ == "__main__":
+    queue_url = os.getenv("SQS_QUEUE_URL")
+    response = sqs.receive_message(
+        QueueUrl=queue_url, 
+        MaxNumberOfMessages=1, 
+        VisibilityTimeout=3600,
+        WaitTimeSeconds=0)
+    if not response.get('Messages'):
+        exit(0)
+
+    message = response['Messages'][0]
+    receipt_handle = message['ReceiptHandle']
+    logging.info(f'SQS Message received: {message}')
+    if message.get('Body') and message['Body'].get('Detail'):
+        requestParameters = message['Body']['Detail'].get('requestParameters')
+        if ( not requestParameters):
+            logging.warning(f"Request Body/Detail invalid.  {message['Body']['Detail']}")
+            exit(0)
+
+        bucket = requestParameters.get('bucketName')
+        key = requestParameters.get('key')
+        logging.info(f'processing {bucket} key {key}')
+
+        processor = CanMsgToTimestreamSignal()
+        processor.s3_download(bucket, key)
+
+        sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+        logging.info('SQS Message processed: {message} ')
+
+      

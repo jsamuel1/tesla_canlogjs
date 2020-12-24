@@ -28,6 +28,6 @@ class TimeStreamDeleteTables(object):
             write_client.delete_table(DatabaseName=self.db_name, TableName=table_props["TableName"])
 
 if __name__ == "__main__":
-    TimeStreamDeleteTables('teslacanbus')
+    TimeStreamDeleteTables('tesla_canlogjs')
     
 
