@@ -7,10 +7,19 @@ import { Queue} from '@aws-cdk/aws-sqs';
 import { BlockPublicAccess, Bucket, ObjectOwnership } from '@aws-cdk/aws-s3';
 import { Duration } from '@aws-cdk/core';
 import { Trail } from '@aws-cdk/aws-cloudtrail';
+import { Vpc } from '@aws-cdk/aws-ec2';
+
+interface MyStackProps extends cdk.StackProps {
+      vpc: Vpc;
+}
 
 export class CdkStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: cdk.Construct, id: string, props?: MyStackProps) {
     super(scope, id, props);
+
+    if (!props) {
+      throw new Error('Props needed');
+    }
 
     // The code that defines your stack goes here
     var db = new CfnDatabase(this, "tsdb", {
@@ -21,6 +30,7 @@ export class CdkStack extends cdk.Stack {
 
     // Define the ECS Fargat Task that will do our processing
     const cluster = new Cluster(this, 'processlogs', { 
+      vpc: props.vpc,
       containerInsights: true,
     })
 
