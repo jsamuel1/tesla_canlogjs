@@ -1,5 +1,6 @@
 import csv
 import gzip
+import json
 import logging
 import os
 from binascii import a2b_hex
@@ -193,6 +194,17 @@ class CanMsgToTimestreamSignal(object):
                 logging.info(f"Bytes scanned: {event['Stats']['Details']} Processed: {event['Stats']['Details']}")
 
 
+def requestParameters_from_body(message):
+    if message.get('Body'):
+        json_body = json.loads(message['Body'])
+        if json_body.get('detail') and json_body['detail'].get('requestParameters'):            
+            requestParameters = json_body['detail'].get('requestParameters')
+            return requestParameters
+        else:
+            logging.info(f"json_body 'detail': {json_body.get('detail')}")
+            logging.info(f"json_body 'requestParameters': {json_body['detail'].get('requestParameters')}")
+    return None
+
 # for lambda
 def handler(event, context):
      for record in event['Records']:
@@ -206,21 +218,21 @@ def handler(event, context):
 # for Docker / SQS
 if __name__ == "__main__":
     queue_url = os.getenv("SQS_QUEUE_URL")
-    response = sqs.receive_message(
-        QueueUrl=queue_url, 
-        MaxNumberOfMessages=1, 
-        VisibilityTimeout=3600,
-        WaitTimeSeconds=0)
-    if not response.get('Messages'):
-        exit(0)
+    while True:
+        response = sqs.receive_message(
+            QueueUrl=queue_url, 
+            MaxNumberOfMessages=1, 
+            VisibilityTimeout=3600,
+            WaitTimeSeconds=20)
+        if not response.get('Messages'):
+            exit(0)
 
-    message = response['Messages'][0]
-    receipt_handle = message['ReceiptHandle']
-    logging.info(f'SQS Message received: {message}')
-    if message.get('Body') and message['Body'].get('Detail'):
-        requestParameters = message['Body']['Detail'].get('requestParameters')
+        message = response['Messages'][0]
+        receipt_handle = message['ReceiptHandle']
+        logging.info(f'SQS Message received: {message}')
+        requestParameters = requestParameters_from_body(message)
         if ( not requestParameters):
-            logging.warning(f"Request Body/Detail invalid.  {message['Body']['Detail']}")
+            logging.warning(f"Request Body/Detail invalid.  {message['Body']}")
             exit(0)
 
         bucket = requestParameters.get('bucketName')
@@ -232,5 +244,3 @@ if __name__ == "__main__":
 
         sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
         logging.info('SQS Message processed: {message} ')
-
-      
