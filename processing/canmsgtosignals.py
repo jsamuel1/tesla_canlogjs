@@ -101,7 +101,7 @@ class CanMsgToTimestreamSignal(object):
 
                 records = CanMsgToTimestreamSignal.extract_signals_to_records(dt, msg, msgdata, timeMilliseconds)
 
-                stored_records = msgrecords.setdefault('tableName', [])
+                stored_records = msgrecords.setdefault(tableName, [])
                 if (len(stored_records) + len(records) > 99): # max batch size for timestream
                     logger.info(f'Saving to database as too many records for table {tableName}')
                     self.save_to_database(tableName, stored_records)
