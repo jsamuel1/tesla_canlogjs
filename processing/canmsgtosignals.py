@@ -222,7 +222,7 @@ if __name__ == "__main__":
         response = sqs.receive_message(
             QueueUrl=queue_url, 
             MaxNumberOfMessages=1, 
-            VisibilityTimeout=3600,
+            VisibilityTimeout=7200,
             WaitTimeSeconds=20)
         if not response.get('Messages'):
             exit(0)
@@ -240,7 +240,11 @@ if __name__ == "__main__":
         logging.info(f'processing {bucket} key {key}')
 
         processor = CanMsgToTimestreamSignal()
-        processor.s3_download(bucket, key)
-
-        sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-        logging.info('SQS Message processed: {message} ')
+        try:
+            processor.s3_download(bucket, key)
+    
+            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+            logging.info('SQS Message processed: {message} ')
+        except Exception as e:
+            logging.exception(f'Failed to process {bucket}/{key}')
+            sqs.change_message_visibility(QueueUrl=queue_url, ReceiptHandle=receipt_handle, VisibilityTimeout=30)

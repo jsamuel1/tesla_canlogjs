@@ -149,7 +149,7 @@ export class CdkGrafanaStack extends cdk.Stack {
           },
           environment: {
             'GF_SERVER_ROOT_URL' : `https://${domainZone.zoneName}`,
-            'GF_INSTALL_PLUGINS' : 'grafana-timestream-datasource',
+            'GF_INSTALL_PLUGINS' : 'grafana-timestream-datasource,grafana-worldmap-panel,pr0ps-trackmap-panel,natel-discrete-panel,yesoreyeram-boomtable-panel',
           }
 
         }

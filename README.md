@@ -23,6 +23,14 @@ Capture CAN messages on a RPi and upload to AWS for processing and analysis
  
  ## Cloud Setup
  * Ensure you have valid AWS access credentials in your environment
+ *  Create/identify a parent Route53 domain and domainName for this service
+ *  Create a `cdk.context.json` file in the cdk folder with context of route53 such as:
+ ```{
+  "domainName": "canlogjs.myspecialdomain.wtf",
+  "hostedZoneId": "Z0000000SMC0GXXSF00X",
+  "zoneName": "specialdomain.wtf"
+}
+```
  * `cdk cdk`
  * `cdk bootstrap`
  * `cdk deploy`
