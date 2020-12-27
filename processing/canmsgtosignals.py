@@ -79,9 +79,10 @@ class CanMsgToTimestreamSignal(object):
         except write_client.exceptions.RejectedRecordsException as err:
             logger.error("RejectedRecords: " + str(err))
             logger.error("RejectedRecords Response: " + str(err.response))
-            logger.error("RejectedRecords Error: " + str(err.response["Error"]))
+            strError = "RejectedRecords Error: " + str(err.response["Error"]) + '\n'
             for rr in err.response["RejectedRecords"]:
-                logger.error("Rejected Index " + str(rr["RecordIndex"]) + ": " + rr["Reason"])
+                strError += "Rejected Index " + str(rr["RecordIndex"]) + ": " + rr["Reason"] + '\n'
+            logger.error(strError)
         except Exception as err:
             logger.exception(f"Error: {err}")
 
@@ -104,14 +105,15 @@ class CanMsgToTimestreamSignal(object):
 
                 stored_records = msgrecords.setdefault(tableName, [])
                 if (len(stored_records) + len(records) > 99): # max batch size for timestream
-                    logger.info(f'Saving to database as too many records for table {tableName}')
+                    logger.info(f'Saving to database as too many records for table {tableName}, {len(stored_records)}')
                     self.save_to_database(tableName, stored_records)
                     stored_records = []
 
                 stored_records.extend(records)
 
             except KeyError as e:
-                logger.warning(f"KeyError: {e} -- {row[4]}: MsgId: {row[1]} Data: {row[2]}")
+                if debug:
+                  logger.warning(f"KeyError: {e} -- {row[4]}: MsgId: {row[1]} Data: {row[2]}")
                 pass
             except ValueError as e:
                 logger.error(f"ValueError: {e} -- {row[4]}: MsgId: {row[1]} Data: {row[2]}")
@@ -150,7 +152,10 @@ class CanMsgToTimestreamSignal(object):
                 valueType = 'BIGINT'
             elif type(sigval) == bool:
                 valueType = 'BOOLEAN'
-            if multiplex == True:
+                
+            if valueType == 'VARCHAR' and sigval == 'SNA':
+                pass # don't write Not Applicable messages
+            elif multiplex == True:
                 dimensions.append(
                             {
                                 'Name': sig, 
@@ -170,10 +175,15 @@ class CanMsgToTimestreamSignal(object):
         return records
 
     def s3_download(self, bucket, key):
-        obj = s3.Object(bucket, key)
-        with TextIOWrapper(gzip.GzipFile(fileobj=obj.get()["Body"], mode='r')) as gzipfile:
-            csvreader = csv.reader(gzipfile)
-            self.process_messages(dbc, csvreader)
+        try:
+            obj = s3.Object(bucket, key)
+            obj.download_file('/tmp/tmpfile.csv.gz')
+            with gzip.open('/tmp/tmpfile.csv.gz', mode='rt') as gzipfile:
+                csvreader = csv.reader(gzipfile)
+                self.process_messages(dbc, csvreader)
+        except aws.exceptions.ClientError as error:
+            raise error
+        
 
 
     def s3_select(self, bucket, key):
