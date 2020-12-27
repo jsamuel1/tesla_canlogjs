@@ -70,7 +70,7 @@ class CanMsgToTimestreamSignal(object):
 
 
     def save_to_database(self, table, records, common_attributes = {}):
-        if not records:
+        if (not records) or (len(records) == 0):
             return
 
         self.ensure_table_exists(table)
@@ -104,7 +104,7 @@ class CanMsgToTimestreamSignal(object):
                 records = CanMsgToTimestreamSignal.extract_signals_to_records(dt, msg, msgdata, timeMilliseconds)
 
                 stored_records = msgrecords.setdefault(tableName, [])
-                if (len(stored_records) + len(records) > 99): # max batch size for timestream
+                if (len(stored_records) + len(records) > 80): # max batch size for timestream
                     logger.info(f'Saving to database as too many records for table {tableName}, {len(stored_records)}')
                     self.save_to_database(tableName, stored_records)
                     stored_records = []
@@ -121,11 +121,19 @@ class CanMsgToTimestreamSignal(object):
             except Exception as e:
                 logger.exception(f"Exception: {e} -- MsgId: {row[1]} Data: {row[2]} DataLength: {row[3]}")
         
+            if csvreader.line_num % 1000:
+                for a_table, a_records in msgrecords.items():
+                    logger.info(f"Writing {a_table}: {len(a_records)}")
+                    self.save_to_database(a_table, a_records)
+                msgrecords.clear()
+                
+                
         logger.info(f"Finished processing CSV.")
         logger.info(f"Writing {len(msgrecords.items())} FrameIDs to database")
         for a_table, a_records in msgrecords.items():
             logger.info(f"Writing {a_table}: {len(a_records)}")
             self.save_to_database(a_table, a_records)
+        msgrecords.clear()
         logger.info("Finished writing FrameIDs to database")
         
 
@@ -181,28 +189,9 @@ class CanMsgToTimestreamSignal(object):
             with gzip.open('/tmp/tmpfile.csv.gz', mode='rt') as gzipfile:
                 csvreader = csv.reader(gzipfile)
                 self.process_messages(dbc, csvreader)
-        except aws.exceptions.ClientError as error:
+        except Exception as error:
             raise error
         
-
-
-    def s3_select(self, bucket, key):
-        req = s3_client.select_object_content(
-                Bucket=bucket, Key=key,
-                ExpressionType='SQL',
-                Expression='select * from s3object',
-                InputSerialization = {'CompressionType': 'GZIP', 'CSV': { 'FieldDelimiter': ',', 'RecordDelimiter': '\n', 'FileHeaderInfo': 'USE'}},
-                OutputSerialization = {'CSV': { 'FieldDelimiter': ',', 'RecordDelimiter': '\n'}}
-            )
-        for event in req['Payload']:
-            if 'Records' in event:
-                records = event['Records']['Payload'].decode('utf-8')
-                file_str = StringIO(''.join(r for r in records))
-                csvreader = csv.reader(file_str)
-                self.process_messages(dbc, csvreader)
-            elif 'Stats' in event:
-                logging.info(f"Bytes scanned: {event['Stats']['Details']} Processed: {event['Stats']['Details']}")
-
 
 def requestParameters_from_body(message):
     if message.get('Body'):
@@ -232,7 +221,7 @@ if __name__ == "__main__":
         response = sqs.receive_message(
             QueueUrl=queue_url, 
             MaxNumberOfMessages=1, 
-            VisibilityTimeout=7200,
+            VisibilityTimeout=43200,
             WaitTimeSeconds=20)
         if not response.get('Messages'):
             exit(0)
